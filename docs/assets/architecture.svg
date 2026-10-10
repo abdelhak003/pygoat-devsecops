@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520">
+  <rect width="1600" height="520" rx="24" fill="#0b1020"/>
+  <style>
+    .box{fill:#111827;stroke:#334155;stroke-width:2}
+    .accent{fill:#0f172a;stroke:#38bdf8;stroke-width:3}
+    .gate{fill:#052e16;stroke:#22c55e;stroke-width:3}
+    .txt{fill:#e5e7eb;font:700 20px Arial,Helvetica,sans-serif}
+    .sub{fill:#94a3b8;font:16px Arial,Helvetica,sans-serif}
+    .arr{stroke:#64748b;stroke-width:4;fill:none;marker-end:url(#a)}
+  </style>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+  <text x="60" y="65" class="txt" font-size="30">DevSecOps architecture</text>
+  <g transform="translate(55 130)">
+    <rect class="accent" x="0" y="0" rx="16" width="205" height="110"/><text class="txt" x="102" y="45" text-anchor="middle">Developer</text><text class="sub" x="102" y="76" text-anchor="middle">code + commit</text>
+    <path class="arr" d="M205 55 H270"/>
+    <rect class="box" x="280" y="0" rx="16" width="220" height="110"/><text class="txt" x="390" y="42" text-anchor="middle">Pre-commit</text><text class="sub" x="390" y="72" text-anchor="middle">Shift Left</text><text class="sub" x="390" y="94" text-anchor="middle">Gitleaks · Bandit · Semgrep</text>
+    <path class="arr" d="M500 55 H565"/>
+    <rect class="accent" x="575" y="0" rx="16" width="235" height="110"/><text class="txt" x="692" y="45" text-anchor="middle">GitLab CI/CD</text><text class="sub" x="692" y="76" text-anchor="middle">automated pipeline</text>
+    <path class="arr" d="M810 55 H875"/>
+    <rect class="box" x="885" y="-35" rx="16" width="260" height="180"/><text class="txt" x="1015" y="25" text-anchor="middle">Security controls</text><text class="sub" x="1015" y="55" text-anchor="middle">SAST · SCA · IaC</text><text class="sub" x="1015" y="82" text-anchor="middle">Container · SBOM · DAST</text><text class="sub" x="1015" y="109" text-anchor="middle">JSON security reports</text>
+    <path class="arr" d="M1145 55 H1210"/>
+    <rect class="gate" x="1220" y="0" rx="16" width="250" height="110"/><text class="txt" x="1345" y="43" text-anchor="middle">Security Gate</text><text class="sub" x="1345" y="73" text-anchor="middle">Policy-as-Code</text><text class="sub" x="1345" y="95" text-anchor="middle">PASS / BLOCKED</text>
+  </g>
+  <g transform="translate(910 350)">
+    <rect class="box" x="0" y="0" rx="14" width="180" height="80"/><text class="txt" x="90" y="34" text-anchor="middle">Grafana</text><text class="sub" x="90" y="60" text-anchor="middle">visualizes</text>
+    <rect class="box" x="220" y="0" rx="14" width="180" height="80"/><text class="txt" x="310" y="34" text-anchor="middle">Slack</text><text class="sub" x="310" y="60" text-anchor="middle">notifies</text>
+    <rect class="accent" x="440" y="0" rx="14" width="250" height="80"/><text class="txt" x="565" y="34" text-anchor="middle">Production</text><text class="sub" x="565" y="60" text-anchor="middle">manual image promotion</text>
+  </g>
+  <path class="arr" d="M1345 240 V310 H1000 V350"/>
+  <path class="arr" d="M1345 310 H1220 V350"/>
+  <path class="arr" d="M1345 310 H1475 V350"/>
+</svg>
