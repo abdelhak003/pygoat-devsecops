@@ -179,6 +179,54 @@ Validated snapshots and provenance are stored in [`monitoring/history/security-h
 
 ---
 
+## Real project evidence
+
+These are **screenshots from the actual execution of this project** in GitLab, Grafana Cloud and Slack — not mockups.
+
+### Security transformation — BEFORE vs AFTER
+
+<p align="center">
+  <img src="docs/evidence/01-grafana-before-after.jpg" alt="Grafana before and after security posture" width="95%">
+</p>
+
+The validated dashboard shows the transition from **1104 blocking findings / Gate BLOCKED / Release BLOCKED** to **0 blocking findings / Gate PASS / Release AUTHORIZED** under the defined policy.
+
+### Security-control matrix
+
+<p align="center">
+  <img src="docs/evidence/02-grafana-control-matrix.jpg" alt="Grafana security control matrix" width="95%">
+</p>
+
+The matrix keeps blockers, warnings and informational findings visible by control. This is why **0 blockers does not mean 0 findings**.
+
+### Release authorization and production promotion
+
+<p align="center">
+  <img src="docs/evidence/03-slack-release-authorized-production-promoted.jpg" alt="Slack release authorized and production promoted notifications" width="85%">
+</p>
+
+Real notifications generated from the Security Gate result: **RELEASE AUTHORIZED** after a PASS, followed by **PRODUCTION PROMOTED** after the manual image-promotion step.
+
+### Controlled vulnerability demo — central gate blocks the release
+
+<p align="center">
+  <img src="docs/evidence/04-security-gate-blocked-demo.jpg" alt="GitLab Security Gate blocked during controlled command injection demo" width="95%">
+</p>
+
+During the command-injection demonstration, the local hook was deliberately bypassed with `--no-verify`. GitLab CI detected the vulnerable change again and the centralized Security Gate returned **BLOCKED**.
+
+### Manual production approval
+
+<p align="center">
+  <img src="docs/evidence/05-manual-production-approval.jpg" alt="GitLab manual production approval" width="95%">
+</p>
+
+Even after technical validation, production promotion remains a **manual action**, preserving a human approval step between security authorization and release.
+
+More screenshots and explanations: [`docs/evidence/`](docs/evidence/).
+
+---
+
 ## What was remediated
 
 ### Container and supply chain
