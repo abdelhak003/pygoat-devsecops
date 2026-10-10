@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="360" viewBox="0 0 1500 360">
+  <rect width="1500" height="360" rx="24" fill="#0b1020"/>
+  <text x="65" y="65" fill="#e5e7eb" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700">Blocking findings remediation journey</text>
+  <line x1="150" y1="230" x2="1350" y2="230" stroke="#334155" stroke-width="6"/>
+  <g font-family="Arial,Helvetica,sans-serif" text-anchor="middle">
+    <circle cx="180" cy="230" r="48" fill="#7f1d1d"/><text x="180" y="238" fill="#fff" font-size="24" font-weight="700">1104</text><text x="180" y="305" fill="#94a3b8" font-size="16">initial</text>
+    <circle cx="480" cy="230" r="42" fill="#9a3412"/><text x="480" y="238" fill="#fff" font-size="24" font-weight="700">29</text><text x="480" y="305" fill="#94a3b8" font-size="16">base image + deps</text>
+    <circle cx="760" cy="230" r="42" fill="#a16207"/><text x="760" y="238" fill="#fff" font-size="24" font-weight="700">25</text><text x="760" y="305" fill="#94a3b8" font-size="16">runtime cleanup</text>
+    <circle cx="1030" cy="230" r="42" fill="#0f766e"/><text x="1030" y="238" fill="#fff" font-size="24" font-weight="700">12</text><text x="1030" y="305" fill="#94a3b8" font-size="16">secrets removed</text>
+    <circle cx="1320" cy="230" r="48" fill="#15803d"/><text x="1320" y="238" fill="#fff" font-size="24" font-weight="700">0</text><text x="1320" y="305" fill="#86efac" font-size="16" font-weight="700">GATE PASS</text>
+  </g>
+  <text x="750" y="120" text-anchor="middle" fill="#22c55e" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700">100% blocker-count reduction under the defined policy</text>
+</svg>
