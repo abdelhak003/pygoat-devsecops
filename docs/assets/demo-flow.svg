@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="450" viewBox="0 0 1500 450">
+  <rect width="1500" height="450" rx="24" fill="#0b1020"/>
+  <style>.t{fill:#e5e7eb;font:700 19px Arial}.s{fill:#94a3b8;font:15px Arial}.r{fill:#450a0a;stroke:#ef4444;stroke-width:3}.g{fill:#052e16;stroke:#22c55e;stroke-width:3}.b{fill:#111827;stroke:#334155;stroke-width:2}.a{stroke:#64748b;stroke-width:4;fill:none;marker-end:url(#m)}</style>
+  <defs><marker id="m" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+  <text x="60" y="60" class="t" font-size="30">Defense-in-depth demo</text>
+  <g transform="translate(50 135)">
+    <rect class="r" x="0" y="0" width="210" height="105" rx="16"/><text class="t" x="105" y="38" text-anchor="middle">Vulnerable code</text><text class="s" x="105" y="67" text-anchor="middle">shell=True</text>
+    <path class="a" d="M210 52 H265"/>
+    <rect class="r" x="275" y="0" width="210" height="105" rx="16"/><text class="t" x="380" y="35" text-anchor="middle">Pre-commit</text><text class="s" x="380" y="63" text-anchor="middle">Bandit + Semgrep</text><text class="s" x="380" y="86" text-anchor="middle">COMMIT REFUSED</text>
+    <path class="a" d="M485 52 H540"/>
+    <rect class="b" x="550" y="0" width="210" height="105" rx="16"/><text class="t" x="655" y="38" text-anchor="middle">--no-verify</text><text class="s" x="655" y="67" text-anchor="middle">local bypass</text>
+    <path class="a" d="M760 52 H815"/>
+    <rect class="r" x="825" y="0" width="210" height="105" rx="16"/><text class="t" x="930" y="35" text-anchor="middle">GitLab CI</text><text class="s" x="930" y="63" text-anchor="middle">detects again</text><text class="s" x="930" y="86" text-anchor="middle">GATE BLOCKED</text>
+    <path class="a" d="M1035 52 H1090"/>
+    <rect class="g" x="1100" y="0" width="210" height="105" rx="16"/><text class="t" x="1205" y="38" text-anchor="middle">Fix + rescan</text><text class="s" x="1205" y="67" text-anchor="middle">safe code</text>
+    <path class="a" d="M1310 52 H1365"/>
+    <rect class="g" x="1375" y="0" width="90" height="105" rx="16"/><text class="t" x="1420" y="47" text-anchor="middle">PASS</text><text class="s" x="1420" y="73" text-anchor="middle">0 blocker</text>
+  </g>
+  <text x="750" y="355" text-anchor="middle" fill="#38bdf8" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700">Local controls improve feedback. CI remains the authoritative security boundary.</text>
+</svg>
