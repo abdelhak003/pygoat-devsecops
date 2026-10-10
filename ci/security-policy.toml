@@ -1,0 +1,95 @@
+# =============================================================================
+#  POLITIQUE DE SÉCURITÉ « AS CODE » — source UNIQUE des seuils de blocage
+# -----------------------------------------------------------------------------
+#  Consignes : R5.2 (quality gates, seuils CVSS), R5.3 (bloquant / non bloquant),
+#              critère E3 (pertinence et justification des seuils).
+#  Cours Phase 0, principe 6 « Compliance as Code ».
+#
+#  Lue par ci/security_gate.py :
+#    - dans CHAQUE job de scan  (--control <nom>) → le job devient rouge sur SON contrôle
+#    - dans le job security_gate (--all)          → décision finale + synthèse + rapport JUnit
+#  Changer un seuil = modifier CE fichier (revu en merge request, donc tracé dans git).
+#
+#  Niveaux :  BLOQUANT    → le pipeline échoue, pas de déploiement
+#             AVERTISSEMENT → visible dans les rapports, ne bloque pas (on ne freine pas
+#                             la livraison pour un risque mineur — consigne R5.3)
+#             INFO        → ignoré par la gate, conservé dans les rapports bruts
+# =============================================================================
+
+[policy]
+# Fail secure : un rapport manquant = le contrôle n'a pas tourné = on BLOQUE.
+fail_on_missing_report = true
+# Durée maximale d'une exemption (au-delà, elle doit être re-justifiée).
+max_exemption_days = 90
+
+# --- Secrets — tolérance ZÉRO ------------------------------------------------
+# Un secret est exploitable immédiatement et reste dans l'historique git.
+[controls.secrets]
+label = "Secrets (Gitleaks)"
+tool = "gitleaks"
+report = "reports/gitleaks.json"
+block_all = true
+
+# --- SAST -------------------------------------------------------------------
+[controls.sast_semgrep]
+label = "SAST (Semgrep)"
+tool = "semgrep"
+report = "reports/semgrep.json"
+block_severity = ["ERROR"]      # injection, RCE, désérialisation…
+warn_severity = ["WARNING"]
+
+[controls.sast_bandit]
+label = "SAST (Bandit)"
+tool = "bandit"
+report = "reports/bandit.json"
+block_severity = ["HIGH"]
+min_confidence = "MEDIUM"       # confiance LOW = trop de faux positifs pour bloquer
+warn_severity = ["MEDIUM"]
+
+# --- SCA : dépendances ------------------------------------------------------
+# Bloquant si score CVSS v3 >= 7.0 (HIGH/CRITICAL selon la FIRST) ET qu'un correctif existe.
+# Sans score CVSS publié, on retombe sur la sévérité de l'éditeur.
+# require_fix : bloquer sur une CVE sans correctif empêcherait toute livraison sans
+# réduire le risque → elle est signalée en avertissement et suivie.
+[controls.sca]
+label = "Dépendances (Trivy fs)"
+tool = "trivy-vuln"
+report = "reports/trivy-fs.json"
+block_cvss = 7.0
+block_severity = ["CRITICAL", "HIGH"]
+require_fix = true
+warn_severity = ["MEDIUM"]
+
+# --- Image Docker (OS de base + librairies) ----------------------------------
+[controls.image]
+label = "Image Docker (Trivy image)"
+tool = "trivy-vuln"
+report = "reports/trivy-image.json"
+block_cvss = 7.0
+block_severity = ["CRITICAL", "HIGH"]
+require_fix = true
+warn_severity = ["MEDIUM"]
+
+# --- IaC : Dockerfile ---------------------------------------------------------
+[controls.iac_trivy]
+label = "IaC Dockerfile (Trivy config)"
+tool = "trivy-misconfig"
+report = "reports/trivy-config.json"
+block_severity = ["CRITICAL", "HIGH"]   # ex. conteneur exécuté en root
+warn_severity = ["MEDIUM", "LOW"]       # ex. HEALTHCHECK manquant
+
+[controls.iac_checkov]
+label = "IaC Dockerfile (Checkov)"
+tool = "checkov"
+report = "reports/checkov.json"
+# CIS Docker Benchmark 4.1 : un utilisateur non-root doit être créé et utilisé
+block_checks = ["CKV_DOCKER_3", "CKV_DOCKER_8"]
+warn_all_other = true
+
+# --- DAST ---------------------------------------------------------------------
+[controls.dast]
+label = "DAST (OWASP ZAP)"
+tool = "zap"
+report = "reports/zap.json"
+block_risk = 3      # High
+warn_risk = 2       # Medium

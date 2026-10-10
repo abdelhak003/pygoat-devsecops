@@ -1,0 +1,48 @@
+# =============================================================================
+#  REGISTRE DES EXEMPTIONS — procédure de contournement exceptionnel (consigne R7.3)
+# -----------------------------------------------------------------------------
+#  Une exemption = l'acceptation TEMPORAIRE et TRACÉE d'UN finding bloquant précis
+#  (faux positif démontré, ou risque accepté sans correctif disponible).
+#  Ce n'est JAMAIS « ignorer un scanner » : pas de joker, correspondance exacte.
+#  Procédure complète : docs/devsecops/06-exemptions.md
+#
+#  Règles appliquées AUTOMATIQUEMENT par ci/security_gate.py :
+#    1. Correspondance EXACTE : même contrôle ET même fingerprint « <règle>|<emplacement> »
+#       (affiché par la gate sous chaque finding bloquant). Jokers * ? [ ] refusés.
+#    2. Tous les champs sont obligatoires, aucun autre champ n'est accepté.
+#    3. owner ≠ approver (principe des 4 yeux) ; justification d'au moins 20 caractères.
+#    4. Durée maximale : 90 jours (security-policy.toml → max_exemption_days) ;
+#       created ≤ aujourd'hui ; dates TOML sans guillemets (AAAA-MM-JJ).
+#    5. Entrée MAL FORMÉE → la gate BLOQUE (fail-secure, jamais ignorée en silence).
+#    6. Exemption EXPIRÉE → n'est plus appliquée : le finding redevient bloquant s'il
+#       existe encore. Elle ne bloque rien d'autre (avertissement dans la synthèse).
+#    7. Le finding exempté reste VISIBLE (niveau « exempted », id de l'exemption) dans
+#       les rapports, la synthèse JSON/Markdown et l'onglet Tests (skipped) de GitLab.
+#    8. Ajout / modification UNIQUEMENT via merge request approuvée par l'approver
+#       → qui, quoi, pourquoi, quand restent dans l'historique git.
+#
+#  Champs :
+#    id           identifiant unique (EXC-NNN)
+#    control      nom du contrôle dans security-policy.toml (secrets, sast_bandit, sca…)
+#    fingerprint  « <règle>|<emplacement> » EXACT, copié depuis la sortie de la gate
+#    reason       justification (faux positif ? risque accepté ? preuve ?)
+#    owner        personne responsable du risque et du suivi
+#    approver     personne qui accepte le risque (différente de l'owner)
+#    ticket       référence de suivi (issue GitLab…)
+#    created      date d'acceptation          expires   date limite (incluse)
+#
+#  ÉTAT ACTUEL : AUCUNE exemption. La baseline de production (5a3b908) passe la gate
+#  sans aucune exception.
+# =============================================================================
+
+# Exemple de format, FICTIF, laissé en commentaire (ne correspond à aucun finding réel) :
+# [[exemption]]
+# id          = "EXC-001"
+# control     = "sast_bandit"
+# fingerprint = "DEMO-FINGERPRINT-DO-NOT-USE|demo/example.py:1"
+# reason      = "Faux positif démontré : la valeur ne provient jamais d'une entrée utilisateur (analyse dans le ticket)."
+# owner       = "développeur responsable"
+# approver    = "responsable sécurité"
+# ticket      = "#0"
+# created     = 2026-10-09
+# expires     = 2026-10-23

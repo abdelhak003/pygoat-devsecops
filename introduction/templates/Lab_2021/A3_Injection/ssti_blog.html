@@ -1,0 +1,30 @@
+{% extends "introduction/base.html" %}
+{% block content %}
+{% block title %}
+<title>SSTI-Blogs</title>
+{% endblock %}
+<div class="container" style="margin-bottom:60px">
+    <h3>Blog {{ blog.blog_id }}</h3>
+    {# The post is DATA: Django auto-escapes it, so template syntax is displayed, never executed. #}
+    <pre style="white-space:pre-wrap;border:1px solid #ccc;padding:12px">{{ blog.content }}</pre>
+
+    {% if constructs %}
+    <h4>Template injection analysis</h4>
+    <p>
+        A vulnerable application that places this post inside template source code would have
+        interpreted the following constructs on the server. Here they are only shown as text.
+    </p>
+    <ul>
+        {% for item in constructs %}
+        <li>
+            <code>{{ item.construct }}</code> ({{ item.kind }})
+            {% if item.risks %}: {{ item.risks|join:"; " }}{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No template syntax found in this post.</p>
+    {% endif %}
+    <a class="btn btn-info" href="/ssti/lab">Back to the lab</a>
+</div>
+{% endblock %}

@@ -1,0 +1,92 @@
+# =============================================================================
+#  .dockerignore — ce qui n'entre PAS dans l'image Docker
+# -----------------------------------------------------------------------------
+#  Le Dockerfile fait `COPY . /app/` : sans ce fichier, TOUT le dossier (historique git,
+#  outillage CI, documentation…) est copié dans l'image livrée en production.
+#  Principe : l'image ne contient que ce dont l'application a besoin pour tourner
+#  → moins de surface d'attaque, aucun secret historique, image plus légère.
+#
+#  Syntaxe Docker : les motifs sont relatifs à la racine du projet. `*.log` ne vise que la
+#  racine ; `**/` vise tous les sous-dossiers.
+#  ⚠️ Ne PAS exclure `**/*.log` : introduction/templates/Lab/A10/debug.log est utilisé
+#     par le lab A10 (introduction/views.py).
+# =============================================================================
+
+# --- Historique Git ----------------------------------------------------------
+# .git contient TOUT l'historique, y compris les secrets passés détectés par Gitleaks
+# (`gitleaks git`). Copié dans l'image, il serait lisible par quiconque obtient l'image.
+.git
+.gitignore
+
+# --- Outillage CI/CD et sécurité : inutile à l'exécution ----------------------
+.gitlab-ci.yml
+.github/
+.pre-commit-config.yaml
+.gitleaks.toml
+.dockerignore
+ci/
+reports/
+.cache/
+
+# --- Fichiers de construction / déploiement : inutiles DANS l'image ------------
+Dockerfile
+docker-compose.yml
+Procfile
+setup.py
+installer.sh
+uninstaller.sh
+uninstaller.py
+
+# --- Documentation et contenus hors application web --------------------------
+# Aucun de ces éléments n'est importé ni rendu par Django (vérifié : INSTALLED_APPS =
+# introduction + challenge ; aucune référence dans le code ou les templates).
+docs/
+cours/
+README.md
+CHANGELOG.md
+.all-contributorsrc
+gh-md-toc
+Solutions/
+# Labs autonomes avec leurs propres Dockerfiles, hors périmètre de l'application
+dockerized_labs/
+# Chatbot expérimental (dépend de chatterbot, absent de requirements.txt)
+chatbot/
+PyGoatBot.py
+
+# --- Secrets et configuration locale --------------------------------------------
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/id_rsa*
+
+# --- Données locales -----------------------------------------------------------
+# Base SQLite de développement : l'image crée la sienne avec `manage.py migrate`.
+**/*.sqlite3
+staticfiles/
+*.log
+
+# --- Environnements virtuels et caches Python -----------------------------------
+venv/
+.venv/
+env/
+ENV/
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+
+# --- IDE et système ------------------------------------------------------------
+.vscode/
+.idea/
+**/*.swp
+**/.DS_Store
+**/Thumbs.db
+
+# --- Tests et outils d'analyse ----------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.tox/
+.coverage
+htmlcov/

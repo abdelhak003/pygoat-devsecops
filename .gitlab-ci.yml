@@ -1,0 +1,397 @@
+# =============================================================================
+#  PIPELINE « TO-BE » — DevSecOps
+# -----------------------------------------------------------------------------
+#  Objectif (consignes) : bloquer AUTOMATIQUEMENT toute vulnérabilité critique
+#  avant la production, à chaque push / merge request (R5.5, R7.4).
+#  L'état précédent (sans sécurité) est conservé sur le tag git `v0-as-is`.
+#
+#  Principe de fonctionnement de CHAQUE contrôle de sécurité :
+#    1) le scanner produit un RAPPORT COMPLET (toutes sévérités, JSON et/ou HTML) → R6.1
+#    2) ci/security_gate.py juge ce rapport avec LA politique unique
+#       ci/security-policy.toml (seuils CVSS, bloquant / avertissement) et le registre
+#       ci/exemptions.toml (exceptions justifiées, datées, qui expirent) → R5.2, R5.3, R7.3
+#  « Policy as code » : un seul fichier de seuils pour tous les outils, versionné et revu.
+#
+#  Les 4 familles de scans statiques démarrent EN PARALLÈLE dès le push (needs: [])
+#  → retour rapide au développeur ET vision complète même si un contrôle échoue.
+# =============================================================================
+
+stages:
+  - secrets_scan        # Gitleaks           — secrets dans le code et l'historique (R4.5)
+  - sast                # Semgrep, Bandit    — failles dans le code source (R4.1)
+  - scan_dependencies   # Trivy fs           — dépendances vulnérables / SCA (R4.2)
+  - iac_scan            # Trivy config, Checkov — sécurité du Dockerfile (R4.6)
+  - build               # vérification du projet
+  - test                # tests unitaires
+  - package             # construction + publication de l'image Docker
+  - docker_scan         # Trivy image        — vulnérabilités de l'image (R4.3)
+  - sbom                # inventaire CycloneDX des composants (R4.7)
+  - dast                # OWASP ZAP          — attaque de l'app en fonctionnement (R4.4)
+  - security_gate       # porte finale : rien ne passe si un contrôle bloquant a échoué
+  - security_observability  # export de la décision vers Grafana (visualisation seulement, R6.2)
+  - deploy             # production (validation manuelle)
+  - notify              # alertes Slack : décision de la gate + mise en production (R6.3)
+
+# Pipelines à chaque push et à chaque merge request, sans doublon (R5.5, R7.4)
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+variables:
+  IMAGE: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.cache/trivy"
+  # Dossiers de labs pédagogiques indépendants, hors périmètre (décision tracée dans le registre d'exemptions)
+  OUT_OF_SCOPE: "challenge,dockerized_labs,Solutions"
+
+# Modèle commun : tous les rapports sont conservés, même quand le job échoue (R6.1, R6.4)
+.reports:
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths: [reports/]
+  before_script:
+    - mkdir -p reports
+
+# Images des outils épinglées sur une version précise : un outil de sécurité qui change
+# tout seul est lui-même un risque de supply chain (leçon Codecov).
+.trivy:
+  image: { name: aquasec/trivy:0.75.0, entrypoint: [""] }
+  cache: { key: trivy-db, paths: [.cache/trivy] }
+  before_script:
+    - mkdir -p reports
+    - apk add --no-cache -q python3     # pour ci/security_gate.py (bibliothèque standard uniquement)
+
+# =============================================================================
+# 1. SECRETS_SCAN — Gitleaks (R4.5)
+# =============================================================================
+secrets_scan:gitleaks:
+  stage: secrets_scan
+  extends: .reports
+  image: { name: zricethezav/gitleaks:v8.30.1, entrypoint: [""] }
+  needs: []
+  variables:
+    GIT_DEPTH: 0          # historique git COMPLET : un secret supprimé reste dans l'historique
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - apk add --no-cache -q python3
+    # Rapport sur TOUT l'historique — non bloquant : l'historique ne se corrige pas en
+    # supprimant la ligne ; la seule réponse est la RÉVOCATION / rotation du secret.
+    - gitleaks git . --config .gitleaks.toml --redact --exit-code 0
+        --report-format json --report-path reports/gitleaks-history.json
+    # Secrets présents dans le code livré
+    - gitleaks dir . --config .gitleaks.toml --redact --exit-code 0
+        --report-format json --report-path reports/gitleaks.json
+    # QUALITY GATE — politique « secrets » : tolérance zéro
+    - python3 ci/security_gate.py --control secrets
+
+# =============================================================================
+# 2. SAST — Semgrep + Bandit (R4.1)
+# =============================================================================
+sast:semgrep:
+  stage: sast
+  extends: .reports
+  image: semgrep/semgrep:1.179.0
+  needs: []
+  variables:
+    SEMGREP_EXCLUDES: "--exclude challenge --exclude dockerized_labs --exclude Solutions"
+  script:
+    # 1) EXÉCUTION — UN seul scan, rapport complet (ERROR + WARNING + INFO).
+    #    Cible explicite « . » = $CI_PROJECT_DIR, le dossier où GitLab a cloné le code.
+    #    Sans cible, l'image officielle suppose « docker run -v $PWD:/src » et cherche le
+    #    code dans /src (vide sous GitLab) → crash exit 2 sans rien analyser.
+    #    Sans --error, Semgrep retourne 0 MÊME s'il trouve des failles : tout code ≠ 0
+    #    signifie que l'OUTIL a échoué → SCAN EXECUTION FAILURE (code 3), jamais un finding.
+    - |
+      semgrep scan --config p/python --config p/django --config p/secrets $SEMGREP_EXCLUDES \
+        --metrics=off --json -o reports/semgrep.json . \
+        || { echo "SCAN EXECUTION FAILURE: semgrep exit=$?"; exit 3; }
+    # 2) VALIDATION — rapport présent, JSON valide, fichiers réellement analysés,
+    #    aucune erreur Semgrep de niveau « error » (sinon code 3)
+    - python3 ci/scan_checks.py semgrep reports/semgrep.json
+    # 3) DÉCISION — politique « sast_semgrep » : ERROR bloquant (code 1 = SECURITY FINDINGS)
+    - python3 ci/security_gate.py --control sast_semgrep
+
+sast:bandit:
+  stage: sast
+  extends: .reports
+  image: python:3.12-slim
+  needs: []
+  script:
+    - pip install -q bandit==1.9.4
+    - bandit -r . -x ./challenge,./dockerized_labs,./Solutions -f json -o reports/bandit.json --exit-zero
+    - bandit -r . -x ./challenge,./dockerized_labs,./Solutions -f html -o reports/bandit.html --exit-zero
+    # QUALITY GATE — politique « sast_bandit » : HIGH avec confiance >= MEDIUM
+    - python3 ci/security_gate.py --control sast_bandit
+
+# =============================================================================
+# 3. SCAN_DEPENDENCIES — Trivy fs / SCA (R4.2)
+# =============================================================================
+scan_dependencies:trivy:
+  stage: scan_dependencies
+  extends: [.reports, .trivy]
+  needs: []
+  script:
+    - trivy fs . --scanners vuln --skip-dirs "$OUT_OF_SCOPE" --format json -o reports/trivy-fs.json
+    - trivy convert --format template --template "@/contrib/html.tpl" -o reports/trivy-fs.html reports/trivy-fs.json
+    # QUALITY GATE — politique « sca » : CVSS >= 7.0 ET correctif disponible
+    - python3 ci/security_gate.py --control sca
+
+# =============================================================================
+# 4. IAC_SCAN — Dockerfile (R4.6)
+# =============================================================================
+iac_scan:trivy-config:
+  stage: iac_scan
+  extends: [.reports, .trivy]
+  needs: []
+  script:
+    - trivy config . --skip-dirs "$OUT_OF_SCOPE" --format json -o reports/trivy-config.json
+    # QUALITY GATE — politique « iac_trivy » : HIGH/CRITICAL bloquant (ex. conteneur root)
+    - python3 ci/security_gate.py --control iac_trivy
+
+iac_scan:checkov:
+  stage: iac_scan
+  extends: .reports
+  image: { name: bridgecrew/checkov:3, entrypoint: [""] }
+  needs: []
+  script:
+    # Rapport complet de toutes les règles CIS Docker (non bloquant)
+    - checkov -f Dockerfile --framework dockerfile --soft-fail -o cli -o json
+        --output-file-path console,reports/checkov.json
+    # QUALITY GATE — politique « iac_checkov » : utilisateur non-root obligatoire (CIS Docker 4.1)
+    - python3 ci/security_gate.py --control iac_checkov
+
+# =============================================================================
+# 5-7. BUILD → TEST → PACKAGE (étapes DevOps d'origine)
+# =============================================================================
+build:
+  stage: build
+  image: python:3.11-bookworm
+  needs: []
+  cache: { key: pip, paths: [.cache/pip] }
+  variables:
+    # Clé Django fournie par la variable CI/CD masquée et protégée (Settings > CI/CD).
+    # Transmise UNIQUEMENT aux jobs qui chargent Django (build, test, dast:zap) — jamais affichée.
+    DJANGO_SECRET_KEY: "$PYGOAT_DJANGO_SECRET_KEY"
+  script:
+    - pip install -r requirements.txt
+    - python -m compileall -q introduction pygoat
+    - python manage.py check
+
+test:
+  stage: test
+  image: python:3.11-bookworm
+  needs: [build]
+  cache: { key: pip, paths: [.cache/pip] }
+  variables:
+    DJANGO_SECRET_KEY: "$PYGOAT_DJANGO_SECRET_KEY"
+  script:
+    - pip install -r requirements.txt
+    - python manage.py test
+
+# L'image est construite même si un scan a échoué : elle doit exister pour être SCANNÉE
+# et testée (DAST). C'est la porte `security_gate` qui empêche son déploiement.
+package:
+  stage: package
+  image: docker:27
+  services: [docker:27-dind]
+  needs: [test]
+  script:
+    # $CI_REGISTRY_PASSWORD = jeton temporaire fourni par GitLab, masqué, valable le temps du job (R5.4)
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$IMAGE" .
+    - docker push "$IMAGE"
+
+# =============================================================================
+# 8. DOCKER_SCAN — Trivy image (R4.3)
+# =============================================================================
+docker_scan:trivy:
+  stage: docker_scan
+  extends: [.reports, .trivy]
+  needs: [package]
+  variables:
+    TRIVY_USERNAME: "$CI_REGISTRY_USER"
+    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+  script:
+    - trivy image "$IMAGE" --format json -o reports/trivy-image.json
+    - trivy convert --format template --template "@/contrib/html.tpl" -o reports/trivy-image.html reports/trivy-image.json
+    # QUALITY GATE — politique « image » : CVSS >= 7.0 ET correctif disponible
+    - python3 ci/security_gate.py --control image
+
+# =============================================================================
+# 9. SBOM — inventaire des composants au format CycloneDX (R4.7)
+# =============================================================================
+sbom:cyclonedx:
+  stage: sbom
+  extends: [.reports, .trivy]
+  needs: [package]
+  variables:
+    TRIVY_USERNAME: "$CI_REGISTRY_USER"
+    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+  script:
+    # Permet de répondre en quelques minutes à « sommes-nous touchés par la nouvelle CVE X ? » (cf. Log4Shell)
+    - trivy image "$IMAGE" --format cyclonedx -o reports/sbom.cdx.json
+
+# =============================================================================
+# 10. DAST — OWASP ZAP sur l'application EN FONCTIONNEMENT (R4.4)
+# -----------------------------------------------------------------------------
+# Environnement « staging » éphémère : l'image fraîchement construite est démarrée
+# comme service à côté de ZAP, puis attaquée. Rien n'est testé en production.
+# =============================================================================
+dast:zap:
+  stage: dast
+  extends: .reports
+  image: ghcr.io/zaproxy/zaproxy:stable
+  needs: [package]
+  environment: { name: staging, action: verify }
+  services:
+    - name: "$IMAGE"
+      # Nom d'hôte attendu par la configuration Django actuelle (ALLOWED_HOSTS)
+      alias: pygoat.herokuapp.com
+  variables:
+    TARGET: "http://pygoat.herokuapp.com:8000"
+    # Variable de job → transmise aussi au conteneur de service PyGoat (Gunicorn en a besoin pour démarrer)
+    DJANGO_SECRET_KEY: "$PYGOAT_DJANGO_SECRET_KEY"
+  script:
+    # 1) PRÉ-REQUIS — prouver que l'application répond en HTTP 2xx/3xx (jusqu'à 180 s).
+    #    Une page d'erreur (4xx/5xx) ou une absence de réponse = échec explicite (code 3) :
+    #    attaquer une application qui ne tourne pas donnerait un faux « aucun problème ».
+    - python3 ci/scan_checks.py wait-http "$TARGET" --timeout 180
+    - mkdir -p /zap/wrk
+    # 2) EXÉCUTION — scan « baseline » : spider 2 min + analyse passive (sans attaque destructive).
+    #    Codes de zap-baseline.py : 0 = OK, 1 = règle FAIL, 2 = WARN (désactivé par -I),
+    #    3 = ERREUR D'EXÉCUTION de ZAP. 0/1/2 sont des verdicts de ZAP que l'on n'utilise pas
+    #    (c'est notre politique qui décide) ; >= 3 = l'outil a échoué → code 3.
+    - |
+      ZAP_RC=0
+      zap-baseline.py -t "$TARGET" -m 2 -r zap.html -J zap.json -I || ZAP_RC=$?
+      echo "zap-baseline.py exit=$ZAP_RC"
+      if [ "$ZAP_RC" -ge 3 ]; then echo "SCAN EXECUTION FAILURE: ZAP exit=$ZAP_RC"; exit 3; fi
+      cp /zap/wrk/zap.html /zap/wrk/zap.json reports/ \
+        || { echo "SCAN EXECUTION FAILURE: rapports ZAP non générés"; exit 3; }
+    # 3) VALIDATION — zap.json présent, JSON valide, au moins un site réellement analysé (sinon code 3)
+    - python3 ci/scan_checks.py zap reports/zap.json
+    # 4) DÉCISION — politique « dast » : alerte High bloquante (code 1 = SECURITY FINDINGS)
+    - python3 ci/security_gate.py --control dast
+
+# =============================================================================
+# 11. SECURITY_GATE — porte finale avant la production
+# =============================================================================
+# Réévalue TOUS les rapports avec la politique et le registre d'exemptions.
+# when: always → la synthèse est produite même si des contrôles ont échoué ;
+# GitLab affiche chaque finding bloquant dans l'onglet « Tests » du pipeline (JUnit).
+# `deploy:production` dépend de ce job : s'il échoue, rien ne part en production.
+security_gate:
+  stage: security_gate
+  image: python:3.12-alpine
+  when: always
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths: [reports/]
+    reports:
+      junit: reports/junit-security.xml
+  needs:
+    - secrets_scan:gitleaks
+    - sast:semgrep
+    - sast:bandit
+    - scan_dependencies:trivy
+    - iac_scan:trivy-config
+    - iac_scan:checkov
+    - docker_scan:trivy
+    - dast:zap
+  script:
+    - python3 ci/security_gate.py --all
+
+# =============================================================================
+# 11 bis. SECURITY_OBSERVABILITY — la décision de la gate envoyée à Grafana Cloud
+# =============================================================================
+# SCANNERS DETECT → SECURITY GATE DECIDES → GRAFANA VISUALISES.
+# Ce job LIT reports/security-summary.json (écrit par la gate, même BLOQUÉE) et ne peut
+# rien changer à la décision : deploy:production dépend uniquement de security_gate.
+#   - variables GRAFANA_OTLP_* absentes → « Grafana telemetry not configured — artifact preserved », exit 0
+#   - Grafana injoignable / refus HTTP  → exit 3, toléré (allow_failure) : job orange, gate inchangée
+#   - configuration incohérente / synthèse absente → exit 2, job rouge : erreur visible à corriger
+# GRAFANA_OTLP_TOKEN est une variable MASQUÉE (jamais affichée, ni le header Authorization).
+security_observability:grafana:
+  stage: security_observability
+  image: python:3.12-alpine
+  when: always              # exporte aussi les pipelines BLOQUÉS
+  needs:
+    - job: security_gate
+      artifacts: true
+  allow_failure:
+    exit_codes: [3]
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths:
+      - reports/security-summary.json
+      - reports/security-telemetry.json
+  script:
+    - python3 ci/security_telemetry.py
+
+# =============================================================================
+# 12. DEPLOY — production, uniquement après la security_gate ET validation humaine
+# =============================================================================
+deploy:production:
+  stage: deploy
+  image: docker:27
+  services: [docker:27-dind]
+  needs: [security_gate]
+  environment: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual         # mise en production = décision humaine tracée (qui, quand)
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker pull "$IMAGE"
+    - docker tag "$IMAGE" "$CI_REGISTRY_IMAGE:production"
+    - docker push "$CI_REGISTRY_IMAGE:production"
+
+# =============================================================================
+# 13. NOTIFY — alertes Slack : décision de la gate et mise en production (R6.3)
+# =============================================================================
+# SCANNERS DETECT → SECURITY GATE DECIDES → GRAFANA VISUALISES → SLACK NOTIFIES.
+# Slack ne décide rien : le message est construit à partir de reports/security-summary.json
+# (artefact de security_gate) et deploy:production ne dépend jamais de ces jobs.
+# SLACK_WEBHOOK_URL est une variable CI/CD MASQUÉE et PROTÉGÉE (Settings > CI/CD > Variables),
+# jamais écrite dans le code ni affichée (R5.4). Sans elle, les jobs ne font rien (exit 0).
+#   - Slack injoignable / refus HTTP → exit 3, toléré (allow_failure) : job orange, gate inchangée
+#   - synthèse absente/invalide, URL non https://hooks.slack.com → exit 2, job rouge : à corriger
+.slack:
+  stage: notify
+  image: python:3.12-alpine
+  allow_failure:
+    exit_codes: [3]
+
+# 🟢 RELEASE AUTHORIZED ou 🔴 RELEASE BLOCKED, pour CHAQUE pipeline.
+# when: always + needs → démarre dès la fin de security_gate, y compris quand elle sort en 1
+# (BLOQUÉ) ; ne dépend pas du job manuel deploy:production.
+notify:slack-gate:
+  extends: .slack
+  when: always
+  needs:
+    - job: security_gate
+      artifacts: true
+  script:
+    - python3 ci/slack_notify.py --event gate
+
+# 🚀 PRODUCTION PROMOTED, uniquement après un deploy:production manuel RÉUSSI
+# (mêmes règles que deploy:production, sinon le `needs` pointerait vers un job absent).
+notify:slack-production:
+  extends: .slack
+  needs:
+    - job: deploy:production
+      artifacts: false
+    - job: security_gate
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+  script:
+    - python3 ci/slack_notify.py --event production

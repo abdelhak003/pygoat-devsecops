@@ -1,0 +1,25 @@
+# =============================================================================
+#  Configuration Gitleaks — pygoat_devsecops
+#  Utilisée en local (pre-commit) ET dans le pipeline (stage secrets_scan) :
+#  une seule source de vérité pour les règles de détection de secrets.
+# =============================================================================
+title = "Gitleaks — pygoat_devsecops"
+
+# On garde TOUTES les règles par défaut de Gitleaks (clés AWS, GitHub, Stripe, JWT…)
+[extend]
+useDefault = true
+
+# -----------------------------------------------------------------------------
+# Règle personnalisée : SECRET_KEY Django codée en dur (CWE-798)
+# Pourquoi : lors de l'état des lieux (docs/devsecops/01-as-is.md), la SECRET_KEY de
+# pygoat/settings.py n'était PAS détectée par les règles par défaut, car elle ne
+# ressemble à aucun format de clé connu. Un outil ne détecte que ce qu'on lui apprend.
+# Impact si elle fuit : falsification des cookies de session et des jetons signés.
+# -----------------------------------------------------------------------------
+[[rules]]
+id = "django-secret-key"
+description = "Django SECRET_KEY codée en dur (CWE-798)"
+regex = '''(?i)\bSECRET_KEY\s*=\s*['"]([^'"\s]{20,})['"]'''
+secretGroup = 1
+keywords = ["secret_key"]
+tags = ["django", "cwe-798", "custom"]

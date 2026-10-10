@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "project": "abdelhak_hafedh_devsecops/pygoat_devsecops",
+  "description": "Validated Security Gate snapshots of the PyGoat remediation journey (blocking findings per control).",
+  "provenance": {
+    "source": "Security Gate results of the GitLab pipelines run on each commit below, validated manually from the pipeline outputs, screenshots and job logs during the project.",
+    "counts": "Number of BLOCKING findings per control, as decided by ci/security_gate.py with the unchanged policy ci/security-policy.toml. Warnings and info findings are not part of these snapshots.",
+    "timestamps": "Commit timestamps from git (committer date, converted to UTC). They date the code that was scanned, not the pipeline run.",
+    "pipeline_id": "null: the pipeline identifiers of these historical runs are not recorded in a verifiable way, so they are not invented.",
+    "not_a_security_score": "A lower number of blockers means fewer findings above the policy thresholds. It is not a percentage of 'how secure' the application is."
+  },
+  "controls": ["gitleaks", "semgrep", "bandit", "trivy_fs", "trivy_image", "trivy_config", "checkov", "zap"],
+  "snapshots": [
+    {
+      "phase": "1-initial-baseline",
+      "title": "Initial security baseline",
+      "commit": "7ccd7b47d291bf8384adf526909ac4687133dec3",
+      "commit_short": "7ccd7b4",
+      "committed_at": "2026-10-08T19:24:09Z",
+      "pipeline_id": null,
+      "gate_status": "BLOCKED",
+      "blockers": {"gitleaks": 13, "semgrep": 8, "bandit": 4, "trivy_fs": 83, "trivy_image": 994, "trivy_config": 1, "checkov": 1, "zap": 0},
+      "total_blockers": 1104
+    },
+    {
+      "phase": "2-phase-a",
+      "title": "Phase A: base image, non-root container, dependencies",
+      "commit": "31a9ed6c29664dca9fe1ddfa0c0c5d60cb3f93d5",
+      "commit_short": "31a9ed6",
+      "committed_at": "2026-10-08T22:31:52Z",
+      "pipeline_id": null,
+      "gate_status": "BLOCKED",
+      "blockers": {"gitleaks": 13, "semgrep": 8, "bandit": 4, "trivy_fs": 0, "trivy_image": 4, "trivy_config": 0, "checkov": 0, "zap": 0},
+      "total_blockers": 29
+    },
+    {
+      "phase": "3-phase-a1",
+      "title": "Phase A.1: runtime packaging tools removed from the image",
+      "commit": "a7edd17c0da14166543ee6b58a72983f21ea24eb",
+      "commit_short": "a7edd17",
+      "committed_at": "2026-10-08T23:00:25Z",
+      "pipeline_id": null,
+      "gate_status": "BLOCKED",
+      "blockers": {"gitleaks": 13, "semgrep": 8, "bandit": 4, "trivy_fs": 0, "trivy_image": 0, "trivy_config": 0, "checkov": 0, "zap": 0},
+      "total_blockers": 25
+    },
+    {
+      "phase": "4-phase-b1",
+      "title": "Phase B1: hardcoded secrets removed",
+      "commit": "bdaedc098c0275d40060f926130ac1500d68839e",
+      "commit_short": "bdaedc0",
+      "committed_at": "2026-10-09T00:50:44Z",
+      "pipeline_id": null,
+      "gate_status": "BLOCKED",
+      "blockers": {"gitleaks": 0, "semgrep": 8, "bandit": 4, "trivy_fs": 0, "trivy_image": 0, "trivy_config": 0, "checkov": 0, "zap": 0},
+      "total_blockers": 12
+    },
+    {
+      "phase": "5-final-secure-baseline",
+      "title": "Final secure baseline: application findings remediated, first full PASS",
+      "commit": "5a3b9080bacce84a9a0cac9e5fda31afe04c319c",
+      "commit_short": "5a3b908",
+      "committed_at": "2026-10-09T02:57:07Z",
+      "pipeline_id": null,
+      "gate_status": "PASS",
+      "blockers": {"gitleaks": 0, "semgrep": 0, "bandit": 0, "trivy_fs": 0, "trivy_image": 0, "trivy_config": 0, "checkov": 0, "zap": 0},
+      "total_blockers": 0
+    }
+  ]
+}
